@@ -98,7 +98,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) { model.stop() }
 }
 
-if CommandLine.arguments.contains("--self-test") {
+if CommandLine.arguments.contains("--render-example") {
+    try MainActor.assumeIsolated {
+        // Render the actual SwiftUI view with fictional data; no provider or session reader runs.
+        let app = NSApplication.shared
+        app.appearance = NSAppearance(named: .aqua)
+        let model = UsageModel()
+        model.small = false
+        let now = Date()
+        model.limits = LimitsResponse(rateLimits: LimitBucket(limitName: nil,
+            primary: LimitWindow(usedPercent: 32, windowDurationMins: 300, resetsAt: now.addingTimeInterval(7200).timeIntervalSince1970),
+            secondary: LimitWindow(usedPercent: 9, windowDurationMins: 10080, resetsAt: now.addingTimeInterval(3 * 86400).timeIntervalSince1970)), rateLimitsByLimitId: nil)
+        model.local = LocalTokens(total: 124800, input: 118400, cached: 96000, output: 6400, recordedAt: now)
+        model.account = AccountUsage(summary: AccountUsage.Summary(lifetimeTokens: 2400000, peakDailyTokens: 180000), dailyUsageBuckets: [AccountUsage.Day(startDate: "2026-10-01", tokens: 180000)])
+        model.limitDate = now; model.tokenDate = now
+        let renderer = ImageRenderer(content: WidgetView(model: model).environment(\.colorScheme, .light))
+        renderer.scale = 2
+        guard let image = renderer.nsImage,
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let png = bitmap.representation(using: .png, properties: [:]) else {
+            fatalError("Could not render example")
+        }
+        let destination = URL(fileURLWithPath: "docs/images/widget-example.png")
+        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try png.write(to: destination)
+        print("Rendered fictional example: docs/images/widget-example.png")
+    }
+} else if CommandLine.arguments.contains("--self-test") {
     let sample = Data(#"{"rateLimitsByLimitId":{"codex":{"primary":{"usedPercent":110,"windowDurationMins":300,"resetsAt":123},"secondary":null},"other":{"primary":{"usedPercent":-5,"windowDurationMins":60},"secondary":null}}}"#.utf8)
     let limits = try JSONDecoder().decode(LimitsResponse.self, from: sample)
     assert(limits.windows.count == 2)

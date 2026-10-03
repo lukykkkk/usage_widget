@@ -2,9 +2,13 @@
 
 A native SwiftUI desktop panel and menu-bar app. Drag the panel to position it. The menu bar controls visibility, small/medium size, keeping above windows, refresh, reconnect, and quit. Follows macOS light/dark appearance.
 
+<img src="docs/images/widget-example.png" alt="Codex usage monitor with colored remaining bars, highlighted reset times, and token totals" width="400">
+
+*Example screenshot uses fictional data. No personal account information is included.*
+
 ## Use the built app
 
-The ready-to-run app is `build/Token Usage.app`. Double-click it in Finder. You do not need Xcode, Homebrew, an API key, or additional packages to run this build on this Mac. Keep Codex installed and signed in so the monitor can read account usage.
+After building from source, the ready-to-run app is `build/Token Usage.app`. Double-click it in Finder. You do not need Xcode, Homebrew, an API key, or additional packages to run the built app. Keep Codex installed and signed in so the monitor can read account usage.
 
 For a permanent location, quit Token Usage from its menu-bar menu, copy the app into Applications in Finder, and open that copy. The widget runs while Token Usage is open; it does not launch automatically at login. You can add it to macOS Login Items if desired.
 
@@ -27,5 +31,7 @@ The account service can delay token summaries. Frequent polling cannot make upst
 `UsageProvider` is the connection boundary for future Claude/Gemini providers; those connections are not implemented.
 
 Verification: run the built executable with `--self-test` for parser checks and `--probe` for a read-only live connection check.
+
+Regenerate the example screenshot with `"build/Token Usage.app/Contents/MacOS/TokenUsage" --render-example`. This renders the actual widget UI with fictional values and does not connect to Codex or read local sessions.
 
 Protocol: https://learn.chatgpt.com/docs/app-server
