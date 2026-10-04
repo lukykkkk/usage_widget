@@ -14,6 +14,8 @@ For a permanent location, quit Token Usage from its menu-bar menu, copy the app 
 
 Drag the panel to move it. Use the header's size button to switch between small and medium, and the refresh button to fetch account usage immediately. The chart icon in the menu bar offers hide/show, keep above windows, reconnect, and quit.
 
+Global shortcuts while Token Usage is running: **F5** refreshes usage, **F6** shows/hides the widget, and **F7** reconnects Codex. These are also displayed beside the menu items. If your keyboard uses function keys for media controls, hold **Fn/Globe** when pressing them. No Accessibility permission is required. If another app has reserved a shortcut, its menu item reports that the shortcut is unavailable.
+
 Remaining usage bars transition continuously from green through yellow to red as allowance is consumed. Reset badges show the date, local time, and countdown. A 97% remaining weekly allowance means 3% used; this is not a conversion to a fixed token quota.
 
 ## Build from source

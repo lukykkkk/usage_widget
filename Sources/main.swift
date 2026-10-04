@@ -1,5 +1,6 @@
 import Cocoa
 import SwiftUI
+import Carbon
 
 final class UsageModel: ObservableObject {
     @Published var limits: LimitsResponse?
@@ -63,6 +64,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = UsageModel()
     var panel: NSPanel!
     var status: NSStatusItem!
+    private var hotKeys: [EventHotKeyRef] = []
+    private var hotKeyHandler: EventHandlerRef?
+    private var localKeyMonitor: Any?
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: model.small ? 316 : 416, height: model.small ? 470 : 670), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -80,9 +84,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status.button?.image = NSImage(systemSymbolName: "chart.bar.xaxis", accessibilityDescription: "Token Usage")
         let menu = NSMenu()
         for (title, action) in [("Show / hide widget", #selector(toggle)), ("Small / medium size", #selector(resize)), ("Keep above windows", #selector(pin)), ("Refresh now", #selector(refresh)), ("Reconnect Codex", #selector(reconnect)), ("Quit", #selector(quit))] {
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: ""); item.target = self; menu.addItem(item)
+            let functionKey: Int? = action == #selector(refresh) ? NSF5FunctionKey : action == #selector(toggle) ? NSF6FunctionKey : action == #selector(reconnect) ? NSF7FunctionKey : nil
+            let key = functionKey.map { String(UnicodeScalar(UInt32($0))!) } ?? ""
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            item.keyEquivalentModifierMask = []
+            item.target = self; menu.addItem(item)
         }
-        status.menu = menu; model.start()
+        status.menu = menu; registerShortcuts(); model.start()
+    }
+    private func registerShortcuts() {
+        // Also support keys delivered directly to this app (including UI automation).
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty else { return event }
+            switch Int(event.keyCode) {
+            case kVK_F5: self.refresh()
+            case kVK_F6: self.toggle()
+            case kVK_F7: self.reconnect()
+            default: return event
+            }
+            return nil
+        }
+        // Carbon hot keys work globally without monitoring keystrokes or requiring Accessibility.
+        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        let installed = InstallEventHandler(GetApplicationEventTarget(), { _, event, context in
+            guard let event, let context else { return OSStatus(eventNotHandledErr) }
+            var key = EventHotKeyID()
+            let result = GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &key)
+            guard result == noErr, key.signature == 0x55534745 else { return OSStatus(eventNotHandledErr) }
+            let delegate = Unmanaged<AppDelegate>.fromOpaque(context).takeUnretainedValue()
+            switch key.id {
+            case 1: delegate.refresh()
+            case 2: delegate.toggle()
+            case 3: delegate.reconnect()
+            default: return OSStatus(eventNotHandledErr)
+            }
+            return noErr
+        }, 1, &eventType, Unmanaged.passUnretained(self).toOpaque(), &hotKeyHandler)
+        for (id, code, action) in [(UInt32(1), kVK_F5, #selector(refresh)), (UInt32(2), kVK_F6, #selector(toggle)), (UInt32(3), kVK_F7, #selector(reconnect))] {
+            var ref: EventHotKeyRef?
+            let result = installed == noErr ? RegisterEventHotKey(UInt32(code), 0, EventHotKeyID(signature: 0x55534745, id: id), GetApplicationEventTarget(), 0, &ref) : installed
+            if result == noErr, let ref { hotKeys.append(ref) }
+            else if let item = status.menu?.items.first(where: { $0.action == action }) {
+                item.title += " (shortcut unavailable)"; item.keyEquivalent = ""
+            }
+        }
     }
     @objc func toggle() { panel.isVisible ? panel.orderOut(nil) : panel.orderFrontRegardless() }
     @objc func resize() {
@@ -95,7 +140,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func refresh() { model.refresh() }
     @objc func reconnect() { model.connect() }
     @objc func quit() { NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification: Notification) { model.stop() }
+    func applicationWillTerminate(_ notification: Notification) {
+        hotKeys.forEach { UnregisterEventHotKey($0) }
+        if let hotKeyHandler { RemoveEventHandler(hotKeyHandler) }
+        if let localKeyMonitor { NSEvent.removeMonitor(localKeyMonitor) }
+        model.stop()
+    }
 }
 
 if CommandLine.arguments.contains("--render-example") {
